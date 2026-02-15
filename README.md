@@ -4,8 +4,7 @@
 
 A standalone, web-based control interface for the [ESP32 Marauder](https://github.com/justcallmekoko/ESP32Marauder). This tool uses the **Web Serial API** to connect directly to your ESP32 from the browser—no installation required.
 
-![Screenshot of the GUI](./assets/screenshot_main.png)
-_(Note: Upload a screenshot of your tool in action to an 'assets' folder)_
+![Screenshot of the GUI](./assets/dashboard-main.png)
 
 ## ⚡ Features
 
@@ -21,7 +20,7 @@ _(Note: Upload a screenshot of your tool in action to an 'assets' folder)_
 
 ### Online (GitHub Pages)
 
-**[> CLICK HERE TO LAUNCH GUI <](https://yourusername.github.io/your-repo-name)**
+**[> CLICK HERE TO LAUNCH GUI <](https://NexusLabs91.github.io/Esp32-Marauder_webGUI)**
 
 ### Local Usage
 
