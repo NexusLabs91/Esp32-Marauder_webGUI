@@ -1,22 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ESP32 Marauder</title>
-    
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    
+
     <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
+
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- ESP Web Tools -->
+    <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 
     <style>
         /* Matrix/CRT Aesthetic Effects */
@@ -34,7 +38,7 @@
             width: 100%;
             height: 100px;
             z-index: 20;
-            background: linear-gradient(0deg, rgba(0,0,0,0) 0%, rgba(0, 255, 65, 0.04) 50%, rgba(0,0,0,0) 100%);
+            background: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(0, 255, 65, 0.04) 50%, rgba(0, 0, 0, 0) 100%);
             opacity: 0.1;
             position: absolute;
             bottom: 100%;
@@ -43,8 +47,13 @@
         }
 
         @keyframes scanline {
-            0% { bottom: 100%; }
-            100% { bottom: -100px; }
+            0% {
+                bottom: 100%;
+            }
+
+            100% {
+                bottom: -100px;
+            }
         }
 
         /* CRT flicker */
@@ -62,9 +71,17 @@
         }
 
         @keyframes flicker {
-            0% { opacity: 0.02; }
-            50% { opacity: 0.05; }
-            100% { opacity: 0.02; }
+            0% {
+                opacity: 0.02;
+            }
+
+            50% {
+                opacity: 0.05;
+            }
+
+            100% {
+                opacity: 0.02;
+            }
         }
 
         /* Custom Scrollbar */
@@ -72,22 +89,25 @@
             width: 8px;
             height: 8px;
         }
+
         ::-webkit-scrollbar-track {
-            background: #001100; 
+            background: #001100;
         }
+
         ::-webkit-scrollbar-thumb {
-            background: #004400; 
+            background: #004400;
             border: 1px solid #00ff41;
         }
+
         ::-webkit-scrollbar-thumb:hover {
-            background: #006600; 
+            background: #006600;
         }
 
         .terminal-text {
             text-shadow: 0 0 5px rgba(0, 255, 65, 0.5);
             line-height: 1.2;
         }
-        
+
         /* Matrix Button Styles */
         .btn-matrix {
             background: rgba(0, 50, 0, 0.3);
@@ -103,22 +123,25 @@
             gap: 6px;
             cursor: pointer;
         }
+
         .btn-matrix:hover:not(:disabled) {
             background: #00ff41;
             color: #000;
             box-shadow: 0 0 10px #00ff41;
         }
+
         .btn-matrix:disabled {
             opacity: 0.3;
             cursor: not-allowed;
             border-color: #002200;
         }
-        
+
         .btn-danger {
             border-color: #aa0000;
             color: #ff3333;
             background: rgba(50, 0, 0, 0.2);
         }
+
         .btn-danger:hover:not(:disabled) {
             background: #ff0000;
             color: #000;
@@ -130,7 +153,7 @@
             color: black;
             font-weight: bold;
         }
-        
+
         .section-header {
             font-size: 0.65rem;
             color: #007700;
@@ -140,8 +163,50 @@
             font-weight: bold;
             letter-spacing: 0.05em;
         }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: rgba(0, 20, 0, 0.9);
+            border: 1px solid #00ff41;
+            color: #00ff41;
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
+            animation: slideIn 0.3s ease-out forwards;
+        }
+
+        .toast.error {
+            border-color: #ff3333;
+            color: #ff3333;
+            box-shadow: 0 0 10px rgba(255, 51, 51, 0.3);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
     </style>
 </head>
+
 <body>
     <div id="root"></div>
 
@@ -158,7 +223,7 @@
                     const svgElement = window.lucide.createElement(LucideIcon);
                     svgElement.setAttribute('width', size);
                     svgElement.setAttribute('height', size);
-                    const baseClass = "lucide lucide-" + name.toLowerCase(); 
+                    const baseClass = "lucide lucide-" + name.toLowerCase();
                     svgElement.setAttribute('class', `${baseClass} ${className || ''}`.trim());
                     svgElement.setAttribute('stroke', 'currentColor');
                     svgElement.setAttribute('stroke-width', '2');
@@ -183,32 +248,46 @@
             const [manualTarget, setManualTarget] = useState("");
             const [manualStationTarget, setManualStationTarget] = useState("");
             const [logoError, setLogoError] = useState(false);
-            
+
+            // New App State
+            const [toasts, setToasts] = useState([]);
+            const [autoScroll, setAutoScroll] = useState(true);
+
             const terminalEndRef = useRef(null);
-            const logsRef = useRef(logs); 
+            const logsRef = useRef(logs);
+            const autoScrollRef = useRef(autoScroll);
 
             useEffect(() => { logsRef.current = logs; }, [logs]);
-            
+            useEffect(() => { autoScrollRef.current = autoScroll; }, [autoScroll]);
+
             useEffect(() => {
-                if (terminalEndRef.current) {
+                if (autoScroll && terminalEndRef.current) {
                     terminalEndRef.current.scrollIntoView({ behavior: "smooth" });
                 }
-            }, [logs]);
+            }, [logs, autoScroll]);
+
+            const showToast = (message, type = 'info') => {
+                const id = Date.now() + Math.random();
+                setToasts(prev => [...prev, { id, message, type }]);
+                setTimeout(() => {
+                    setToasts(prev => prev.filter(t => t.id !== id));
+                }, 3000);
+            };
 
             // --- Serial Connection Logic ---
             const connectSerial = async () => {
                 if (!navigator.serial) {
-                    alert("Web Serial API not supported. Use Chrome/Edge.");
+                    showToast("Web Serial API not supported. Use Chrome/Edge.", "error");
                     return;
                 }
                 try {
                     const selectedPort = await navigator.serial.requestPort();
                     await selectedPort.open({ baudRate: parseInt(baudRate) });
-                    
+
                     const textEncoder = new TextEncoderStream();
                     const writableStreamClosed = textEncoder.readable.pipeTo(selectedPort.writable);
                     const writer = textEncoder.writable.getWriter();
-                    
+
                     const textDecoder = new TextDecoderStream();
                     const readableStreamClosed = selectedPort.readable.pipeTo(textDecoder.writable);
                     const reader = textDecoder.readable.getReader();
@@ -248,7 +327,7 @@
                         if (done) break;
                         buffer += value;
                         const lines = buffer.split('\n');
-                        buffer = lines.pop(); 
+                        buffer = lines.pop();
                         for (const line of lines) {
                             const cleaned = line.replace(/\r/g, '');
                             if (cleaned.trim() !== '') {
@@ -283,10 +362,39 @@
                 });
             };
 
+            const downloadLogs = () => {
+                if (logs.length === 0) {
+                    showToast("No logs to download.", "error");
+                    return;
+                }
+                const blob = new Blob([logs.join('\n')], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `marauder_logs_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast("Logs downloaded.");
+            };
+
+            const copyLogs = () => {
+                if (logs.length === 0) {
+                    showToast("No logs to copy.", "error");
+                    return;
+                }
+                navigator.clipboard.writeText(logs.join('\n')).then(() => {
+                    showToast("Logs copied to clipboard.");
+                }).catch(() => {
+                    showToast("Failed to copy logs.", "error");
+                });
+            };
+
             // --- Control Handlers ---
             const handleSelect = () => {
                 if (!manualTarget) {
-                    addLog("--- ERROR: ENTER INDEX ID FIRST ---");
+                    showToast("ENTER INDEX ID FIRST", "error");
                     return;
                 }
                 sendCommand(`select -a ${manualTarget}`);
@@ -294,7 +402,7 @@
 
             const handleStationSelect = () => {
                 if (!manualStationTarget) {
-                    addLog("--- ERROR: ENTER STATION INDEX ID FIRST ---");
+                    showToast("ENTER STATION INDEX ID FIRST", "error");
                     return;
                 }
                 sendCommand(`select -c ${manualStationTarget}`);
@@ -302,7 +410,7 @@
 
             // --- Render Logic ---
             const renderControls = () => {
-                switch(activeTab) {
+                switch (activeTab) {
                     case 'wifi':
                         return (
                             <div className="space-y-4">
@@ -329,8 +437,8 @@
                                     <div className="space-y-2">
                                         {/* AP Selection */}
                                         <div className="flex gap-2 items-end">
-                                            <input 
-                                                type="text" 
+                                            <input
+                                                type="text"
                                                 value={manualTarget}
                                                 onChange={(e) => setManualTarget(e.target.value)}
                                                 placeholder="AP Index (e.g. 0,2)"
@@ -343,8 +451,8 @@
 
                                         {/* Station Selection */}
                                         <div className="flex gap-2 items-end">
-                                            <input 
-                                                type="text" 
+                                            <input
+                                                type="text"
                                                 value={manualStationTarget}
                                                 onChange={(e) => setManualStationTarget(e.target.value)}
                                                 placeholder="Station Index (e.g. 0,1)"
@@ -452,16 +560,16 @@
                                         </button>
                                     </div>
                                 </div>
-                                
+
                                 <div className="mt-2 pt-2 border-t border-green-900">
-                                     <button onClick={() => sendCommand('stopscan')} disabled={!isConnected} className="w-full btn-matrix btn-danger border-red-500 justify-center">
+                                    <button onClick={() => sendCommand('stopscan')} disabled={!isConnected} className="w-full btn-matrix btn-danger border-red-500 justify-center">
                                         <Icon name="Octagon" /> CEASE ALL ATTACKS (stopscan)
                                     </button>
                                 </div>
                             </div>
                         );
                     case 'sniffers':
-                         return (
+                        return (
                             <div className="grid grid-cols-2 gap-2">
                                 <button onClick={() => sendCommand('sniffpmkid')} disabled={!isConnected} className="btn-matrix">
                                     <Icon name="Key" /> SNIFF PMKID
@@ -501,9 +609,41 @@
                                 <button onClick={() => sendCommand('clearlist -a')} disabled={!isConnected} className="btn-matrix">
                                     <Icon name="Trash" /> CLEAR LISTS
                                 </button>
-                                 <button onClick={() => sendCommand('stopscan')} disabled={!isConnected} className="btn-matrix btn-danger">
+                                <button onClick={() => sendCommand('stopscan')} disabled={!isConnected} className="btn-matrix btn-danger">
                                     <Icon name="Power" /> EMERG. STOP
                                 </button>
+                            </div>
+                        );
+                    case 'flasher':
+                        return (
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="section-header text-blue-500 border-blue-900">FIRMWARE INSTALLER</div>
+                                    <p className="text-xs text-green-700 mb-3 block">
+                                        Flash firmware directly from your browser. Disconnect the Serial Terminal above first!
+                                    </p>
+
+                                    <div className="mb-3">
+                                        <label className="text-[10px] text-green-600 block mb-1">MANIFEST URL</label>
+                                        <input
+                                            type="text"
+                                            id="manifestUrl"
+                                            defaultValue="https://raw.githubusercontent.com/justcallmekoko/ESP32Marauder/master/firmware/manifest.json"
+                                            className="w-full bg-black border border-green-800 text-green-500 px-2 py-1 text-xs focus:outline-none focus:border-green-400 font-mono"
+                                            onChange={(e) => {
+                                                const btn = document.querySelector('esp-web-install-button');
+                                                if (btn) btn.setAttribute('manifest', e.target.value);
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div className="flex justify-center p-4 border border-green-900 bg-black/50">
+                                        <esp-web-install-button manifest="https://raw.githubusercontent.com/justcallmekoko/ESP32Marauder/master/firmware/manifest.json"></esp-web-install-button>
+                                    </div>
+                                    <p className="text-[10px] text-green-800 text-center mt-2">
+                                        Powered by esp-web-tools
+                                    </p>
+                                </div>
                             </div>
                         );
                     default: return null;
@@ -523,8 +663,8 @@
                                     <Icon name="Ghost" size={20} />
                                 </div>
                             ) : (
-                                <img 
-                                    src="marauder_skull_patch_04_full_final.png" 
+                                <img
+                                    src="marauder_skull_patch_04_full_final.png"
                                     className="w-12 h-12 object-contain drop-shadow-[0_0_5px_rgba(0,255,65,0.5)]"
                                     alt="Marauder Logo"
                                     onError={() => setLogoError(true)}
@@ -537,8 +677,8 @@
                         </div>
 
                         <div className="flex items-center gap-2">
-                            <select 
-                                value={baudRate} 
+                            <select
+                                value={baudRate}
                                 onChange={(e) => setBaudRate(e.target.value)}
                                 className="bg-black border border-green-800 text-green-600 px-2 py-1 rounded text-xs focus:outline-none"
                                 disabled={isConnected}
@@ -560,14 +700,14 @@
 
                     {/* Main Body */}
                     <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-                        
+
                         {/* LEFT: Control Panel */}
                         <div className="w-full md:w-[350px] flex flex-col border-r border-green-900 bg-neutral-900/95 z-20 shrink-0 h-[50%] md:h-full">
-                            
+
                             {/* Tab Navigation */}
                             <div className="flex border-b border-green-900 bg-black overflow-x-auto">
-                                {['wifi', 'ble', 'attack', 'sniffers', 'system'].map(tab => (
-                                    <button 
+                                {['wifi', 'ble', 'attack', 'sniffers', 'system', 'flasher'].map(tab => (
+                                    <button
                                         key={tab}
                                         onClick={() => setActiveTab(tab)}
                                         className={`flex-1 py-2 px-2 text-[10px] md:text-xs uppercase tracking-wider transition-colors border-r border-green-900 last:border-0 whitespace-nowrap ${activeTab === tab ? 'tab-active' : 'text-green-700 hover:text-green-400'}`}
@@ -583,7 +723,7 @@
                             </div>
 
                             {/* Quick Status */}
-                             <div className="p-2 border-t border-green-900 bg-black text-[10px] text-center text-green-800">
+                            <div className="p-2 border-t border-green-900 bg-black text-[10px] text-center text-green-800">
                                 MARAUDER FW V1.0 | WEB SERIAL
                             </div>
                         </div>
@@ -592,9 +732,28 @@
                         <div className="flex-1 flex flex-col bg-black min-h-0 z-10 relative">
                             <div className="bg-green-950/20 p-1 px-3 border-b border-green-900 flex justify-between items-center text-[10px] text-green-600 shrink-0">
                                 <span>SERIAL OUTPUT STREAM</span>
-                                <button onClick={() => setLogs([])} className="hover:text-white">CLEAR</button>
+                                <div className="flex items-center gap-3">
+                                    <label className="flex items-center gap-1 cursor-pointer hover:text-green-400" title="Toggle Auto-Scroll">
+                                        <input
+                                            type="checkbox"
+                                            checked={autoScroll}
+                                            onChange={(e) => setAutoScroll(e.target.checked)}
+                                            className="accent-green-600"
+                                        />
+                                        AUTO-SCROLL
+                                    </label>
+                                    <span className="opacity-50">|</span>
+                                    <button onClick={copyLogs} className="hover:text-white flex items-center gap-1" title="Copy to clipboard">
+                                        <Icon name="Copy" size={12} /> COPY
+                                    </button>
+                                    <button onClick={downloadLogs} className="hover:text-white flex items-center gap-1" title="Download log file">
+                                        <Icon name="Download" size={12} /> SAVE
+                                    </button>
+                                    <span className="opacity-50">|</span>
+                                    <button onClick={() => setLogs([])} className="hover:text-red-400 text-red-600">CLEAR</button>
+                                </div>
                             </div>
-                            
+
                             <div className="flex-1 overflow-y-auto p-4 font-mono text-xs md:text-sm terminal-text space-y-1">
                                 {logs.length === 0 && <div className="text-green-900 opacity-50 italic">Waiting for serial data...</div>}
                                 {logs.map((log, i) => (
@@ -603,7 +762,7 @@
                                 <div ref={terminalEndRef} />
                             </div>
 
-                            <form 
+                            <form
                                 onSubmit={(e) => {
                                     e.preventDefault();
                                     const cmd = e.target.elements.cmd.value;
@@ -613,15 +772,24 @@
                                 className="border-t border-green-800 p-2 flex gap-2 bg-black/90 shrink-0"
                             >
                                 <span className="text-green-500 font-bold">{'>'}</span>
-                                <input 
-                                    name="cmd" 
+                                <input
+                                    name="cmd"
                                     autoComplete="off"
                                     className="flex-1 bg-transparent border-none outline-none text-green-400 font-mono placeholder-green-900 text-sm"
-                                    placeholder="Enter manual command..." 
+                                    placeholder="Enter manual command..."
                                 />
                             </form>
                         </div>
 
+                    </div>
+
+                    {/* Toast Notifications */}
+                    <div className="toast-container text-mono">
+                        {toasts.map(t => (
+                            <div key={t.id} className={`toast ${t.type}`}>
+                                {t.message}
+                            </div>
+                        ))}
                     </div>
                 </div>
             );
@@ -631,4 +799,5 @@
         root.render(<App />);
     </script>
 </body>
+
 </html>
