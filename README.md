@@ -4,17 +4,30 @@
 
 A standalone, web-based control interface for the [ESP32 Marauder](https://github.com/justcallmekoko/ESP32Marauder). This tool uses the **Web Serial API** to connect directly to your ESP32 from the browser—no installation required.
 
-![Screenshot of the GUI](./assets/dashboard-main.png)
+> **🆕 NEW IN V2:** The UI has been completely redesigned with a sleek, Cyberpunk/Netrunner aesthetic, and the codebase has been modularized to allow anyone to build and integrate their own custom UIs!
 
 ## ⚡ Features
 
 - **Zero Install:** Runs entirely in the browser (Chrome, Edge, Opera).
-- **Cyberpunk/Terminal Aesthetic:** Matrix-style styling with CRT flicker effects.
-- **Full Control Suite:** \* WiFi Scanning (AP, Station, All)
+- **Netrunner/Cyberpunk Aesthetic:** Modern dark-mode styling with cyan and red technical accents.
+- **Full Control Suite:** 
+  - WiFi Scanning (AP, Station, All)
   - Bluetooth/BLE Sniffing & Spamming
   - Attack Vectors (Deauth, Probe, Beacon Spam)
   - PCAP Sniffing Controls
+  - Web USB Firmware Flashing
 - **Live Serial Terminal:** View output logs in real-time.
+
+## 🏗️ Modular Architecture 
+
+The codebase is now fully modular, separating the core serial connection logic from the visual UI. This allows you (or your AI) to easily build a completely different user interface while keeping the complex connection and parsing logic intact!
+
+- `marauder_client.js`: The core framework-agnostic JavaScript class that handles the Web Serial API (connecting, parsing streams, sending commands).
+- `ui.jsx`: The React components and view logic.
+- `styles.css`: All the Tailwind and custom Cyberpunk CSS.
+- `index.html`: A lightweight shell that imports the above files. 
+
+If you want to build your own UI, simply swap out `styles.css` and `ui.jsx`!
 
 ## 🚀 Usage
 
@@ -24,11 +37,11 @@ A standalone, web-based control interface for the [ESP32 Marauder](https://githu
 
 ### Local Usage
 
-1.  Download the `index.html` file.
-2.  Open it in a chromium-based browser (Chrome/Edge).
-3.  Connect your ESP32 via USB.
-4.  Select the correct baud rate (default: `115200`).
-5.  Click **CONNECT**.
+1. Clone or download this repository.
+2. Open `index.html` in a chromium-based browser (Chrome/Edge).
+3. Connect your ESP32 via USB.
+4. Select the correct baud rate (default: `115200`).
+5. Click **CONNECT**.
 
 ## 🛠️ Requirements
 
