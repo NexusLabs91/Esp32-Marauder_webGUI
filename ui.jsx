@@ -27,7 +27,14 @@ const ActionCard = ({ title, desc, icon, color, onClick, disabled }) => (
             <Icon name={icon} size={24} />
         </div>
         <div className="title">{title}</div>
-        <div className="desc">{desc}</div>
+        {desc && <div className="desc">{desc}</div>}
+    </div>
+);
+
+const SectionHeader = ({ title, icon }) => (
+    <div className="col-span-full text-[10px] text-slate-500 uppercase tracking-widest border-b border-gray-800 pb-1 mb-2 mt-4 flex items-center gap-2">
+        {icon && <Icon name={icon} size={12} />}
+        {title}
     </div>
 );
 
@@ -41,11 +48,12 @@ function App() {
 
     // App State
     const [logs, setLogs] = useState([]);
-    const [activeTab, setActiveTab] = useState('wifi'); // wifi, ble, flasher
+    const [activeTab, setActiveTab] = useState('wifi'); // wifi, ble, system, macros, flasher
 
     // UI State
     const [toasts, setToasts] = useState([]);
     const [autoScroll, setAutoScroll] = useState(true);
+    const [isMacroRunning, setIsMacroRunning] = useState(false);
 
     const terminalEndRef = useRef(null);
 
@@ -89,6 +97,40 @@ function App() {
     const disconnectSerial = () => client.disconnect();
     const sendCommand = (cmd) => client.sendCommand(cmd);
     const clearLogs = () => setLogs([]);
+
+    // Macro Runner
+    const runMacro = async (sequenceName, steps) => {
+        if (!isConnected) {
+            showToast("Not connected to device", "error");
+            return;
+        }
+        if (isMacroRunning) {
+            showToast("A macro is already running!", "warn");
+            return;
+        }
+
+        setIsMacroRunning(true);
+        showToast(`Starting Macro: ${sequenceName}`, "info");
+        client._dispatchLog(`[MACRO] --- STARTING SEQUENCE: ${sequenceName} ---`, "info");
+
+        try {
+            for (let i = 0; i < steps.length; i++) {
+                const step = steps[i];
+                if (step.cmd) {
+                    await client.sendCommand(step.cmd);
+                } else if (step.delay) {
+                    client._dispatchLog(`[MACRO] Waiting ${step.delay}ms...`, "info");
+                    await new Promise(resolve => setTimeout(resolve, step.delay));
+                }
+            }
+            client._dispatchLog(`[MACRO] --- SEQUENCE COMPLETE: ${sequenceName} ---`, "success");
+            showToast(`Macro ${sequenceName} Complete`, "success");
+        } catch (err) {
+            client._dispatchLog(`[MACRO] ERROR: ${err.message}`, "error");
+        } finally {
+            setIsMacroRunning(false);
+        }
+    };
 
     // Helper to format log lines
     const renderLogLine = (log, i) => {
@@ -154,7 +196,7 @@ function App() {
                             <Icon name="Usb" size={16} /> CONNECT
                         </button>
                     ) : (
-                        <button onClick={disconnectSerial} className="btn danger h-[36px]">
+                        <button onClick={disconnectSerial} className="btn danger h-[36px] bg-red-900/20">
                             <Icon name="PowerOff" size={16} /> DISCONNECT
                         </button>
                     )}
@@ -214,40 +256,16 @@ function App() {
                 </div>
 
                 {/* RIGHT: COMMAND DECK */}
-                <div className="w-full lg:w-[400px] flex flex-col gap-2 shrink-0 overflow-y-auto">
-
-                    {/* Hardware Stats (Mocked conceptually for aesthetic) */}
-                    <div className="panel p-4 shrink-0">
-                        <div className="section-title">SYSTEM RESOURCES</div>
-                        <div className="space-y-4">
-                            <div>
-                                <div className="flex justify-between text-xs text-slate-400 mb-1 font-mono">
-                                    <span>CPU LOAD</span>
-                                    <span className="text-cyan-400">24%</span>
-                                </div>
-                                <div className="progress-track"><div className="progress-fill" style={{ width: '24%' }}></div></div>
-                            </div>
-                            <div className="flex gap-2">
-                                <div className="flex-1 bg-white/5 border border-white/10 rounded p-2 text-center">
-                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Queue</div>
-                                    <div className="font-mono text-white text-lg">0</div>
-                                </div>
-                                <div className="flex-1 bg-white/5 border border-white/10 rounded p-2 text-center">
-                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Channel</div>
-                                    <div className="font-mono text-cyan-400 text-lg">6</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <div className="w-full lg:w-[450px] flex flex-col gap-2 shrink-0 overflow-y-auto">
 
                     {/* Main Command Tabs */}
-                    <div className="panel flex flex-col flex-1 min-h-[400px]">
-                        <div className="flex border-b border-gray-800 shrink-0 px-2 pt-2">
-                            {['wifi', 'ble', 'flasher'].map(tab => (
+                    <div className="panel flex flex-col flex-1 min-h-[500px]">
+                        <div className="flex border-b border-gray-800 shrink-0 px-2 pt-2 overflow-x-auto no-scrollbar">
+                            {['wifi', 'ble', 'system', 'macros', 'flasher'].map(tab => (
                                 <button
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
-                                    className={`tab-btn flex-1 ${activeTab === tab ? 'active' : ''}`}
+                                    className={`tab-btn flex-1 whitespace-nowrap px-3 ${activeTab === tab ? 'active' : ''}`}
                                 >
                                     {tab}
                                 </button>
@@ -255,74 +273,221 @@ function App() {
                         </div>
 
                         <div className="p-4 flex-1 overflow-y-auto">
-                            <div className="section-title mb-4">
-                                <Icon name="LayoutGrid" size={14} className="text-cyan-400" /> {activeTab.toUpperCase()} PROTOCOLS
-                            </div>
 
+                            {/* --- WIFI TAB --- */}
                             {activeTab === 'wifi' && (
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <ActionCard
-                                            title="SCAN APs" desc="Discover networks" icon="Wifi" color="cyan"
-                                            disabled={!isConnected} onClick={() => sendCommand('scanap')}
-                                        />
-                                        <ActionCard
-                                            title="SCAN STAs" desc="Find clients" icon="Smartphone" color="cyan"
-                                            disabled={!isConnected} onClick={() => sendCommand('scansta')}
-                                        />
+                                <div className="space-y-2">
+                                    <SectionHeader title="Scanning" icon="Search" />
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <ActionCard title="Scan APs" icon="Wifi" color="cyan" onClick={() => sendCommand('scanap')} disabled={!isConnected} />
+                                        <ActionCard title="Scan Stations" icon="Smartphone" color="cyan" onClick={() => sendCommand('scansta')} disabled={!isConnected} />
+                                        <ActionCard title="Scan All" icon="Globe" color="cyan" onClick={() => sendCommand('scanall')} disabled={!isConnected} />
+                                        <ActionCard title="List APs" icon="List" color="cyan" onClick={() => sendCommand('listap')} disabled={!isConnected} />
+                                        <ActionCard title="List STAs" icon="Users" color="cyan" onClick={() => sendCommand('liststa')} disabled={!isConnected} />
+                                        <ActionCard title="Clear List" icon="Trash" color="cyan" onClick={() => sendCommand('clearlist -a')} disabled={!isConnected} />
                                     </div>
 
-                                    <ActionCard
-                                        title="SNIFF PACKETS" desc="Capture raw traffic data" icon="Focus" color="cyan"
-                                        disabled={!isConnected} onClick={() => sendCommand('sniffbeacon')}
-                                    />
-
-                                    <div className="grid grid-cols-2 gap-3 mt-4">
-                                        <div className="col-span-2 text-[10px] text-slate-500 uppercase tracking-widest border-b border-gray-800 pb-1 mb-1">Offensive Operations</div>
-                                        <ActionCard
-                                            title="DEAUTH" desc="Disconnect target" icon="WifiOff" color="red"
-                                            disabled={!isConnected} onClick={() => sendCommand('attack -t deauth')}
-                                        />
-                                        <ActionCard
-                                            title="BEACON SPAM" desc="Flood SSIDs" icon="Radio" color="red"
-                                            disabled={!isConnected} onClick={() => sendCommand('attack -t beacon -r')}
-                                        />
+                                    <SectionHeader title="Sniffing" icon="Focus" />
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <ActionCard title="Probe" icon="RadioReceiver" color="cyan" onClick={() => sendCommand('sniffprobe')} disabled={!isConnected} />
+                                        <ActionCard title="Beacon" icon="Radio" color="cyan" onClick={() => sendCommand('sniffbeacon')} disabled={!isConnected} />
+                                        <ActionCard title="Deauth" icon="WifiOff" color="cyan" onClick={() => sendCommand('sniffdeauth')} disabled={!isConnected} />
+                                        <ActionCard title="Raw" icon="Binary" color="cyan" onClick={() => sendCommand('sniffraw')} disabled={!isConnected} />
+                                        <ActionCard title="PMKID" icon="Key" color="cyan" onClick={() => sendCommand('sniffpmkid')} disabled={!isConnected} />
+                                        <ActionCard title="ESP" icon="Cpu" color="cyan" onClick={() => sendCommand('sniffesp')} disabled={!isConnected} />
+                                        <ActionCard title="SigMon" icon="Activity" color="cyan" onClick={() => sendCommand('sigmon')} disabled={!isConnected} />
+                                        <ActionCard title="PktMon" icon="Eye" color="cyan" onClick={() => sendCommand('packetmonitor')} disabled={!isConnected} />
+                                        <ActionCard title="Pwnagotchi" icon="Ghost" color="cyan" onClick={() => sendCommand('sniffpwn')} disabled={!isConnected} />
+                                        <button onClick={() => sendCommand('wardrive')} disabled={!isConnected} className="btn col-span-3">Wardrive Mode</button>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-3 mt-2">
-                                        <button onClick={() => sendCommand('reboot')} disabled={!isConnected} className="btn h-[50px] flex-col gap-1 text-[10px]">
-                                            <Icon name="RefreshCcw" size={14} /> REBOOT
-                                        </button>
-                                        <button onClick={() => sendCommand('stopscan')} disabled={!isConnected} className="btn h-[50px] flex-col gap-1 text-[10px] hover:border-red-500 hover:text-red-500">
-                                            <Icon name="StopCircle" size={14} /> STOP PROCESS
-                                        </button>
+                                    <SectionHeader title="Attacks" icon="AlertTriangle" />
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <ActionCard title="Deauth Broad" icon="WifiOff" color="red" onClick={() => sendCommand('attack -t deauth')} disabled={!isConnected} />
+                                        <ActionCard title="Deauth STA" icon="UserX" color="red" onClick={() => sendCommand('attack -t deauth -c')} disabled={!isConnected} />
+                                        <ActionCard title="Spam (List)" icon="Radio" color="red" onClick={() => sendCommand('attack -t beacon -l')} disabled={!isConnected} />
+                                        <ActionCard title="Spam (Rand)" icon="Shuffle" color="red" onClick={() => sendCommand('attack -t beacon -r')} disabled={!isConnected} />
+                                        <ActionCard title="Spam (Clone)" icon="Copy" color="red" onClick={() => sendCommand('attack -t beacon -a')} disabled={!isConnected} />
+                                        <ActionCard title="Probe Flood" icon="Waves" color="red" onClick={() => sendCommand('attack -t probe')} disabled={!isConnected} />
+                                        <ActionCard title="Rickroll" icon="Music" color="red" onClick={() => sendCommand('attack -t rickroll')} disabled={!isConnected} />
+                                        <ActionCard title="Karma" icon="Zap" color="red" onClick={() => sendCommand('karma')} disabled={!isConnected} />
+                                        <ActionCard title="Evil Portal" icon="Globe" color="red" onClick={() => sendCommand('evilportal')} disabled={!isConnected} />
+                                        <ActionCard title="Bad Message" icon="MessageSquareWarning" color="red" onClick={() => sendCommand('attack -t badmsg')} disabled={!isConnected} />
+                                        <button onClick={() => sendCommand('attack -t sleep')} disabled={!isConnected} className="btn danger col-span-2">Sleep Attack</button>
+                                    </div>
+
+                                    <SectionHeader title="Channel Control" icon="SlidersHorizontal" />
+                                    <div className="grid grid-cols-3 gap-2 pb-4">
+                                        <button onClick={() => sendCommand('channel -p')} disabled={!isConnected} className="btn text-xs">Ch Down</button>
+                                        <button onClick={() => sendCommand('channel -n')} disabled={!isConnected} className="btn text-xs">Ch Up</button>
+                                        <div className="flex gap-1 justify-center">
+                                            {[1, 6, 11].map(ch => (
+                                                <button key={ch} onClick={() => sendCommand(`channel -s ${ch}`)} disabled={!isConnected} className="btn text-xs px-2 flex-1">{ch}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <SectionHeader title="SSIDs" icon="ListOrdered" />
+                                    <div className="grid grid-cols-2 gap-2 pb-4">
+                                        <button onClick={() => sendCommand('listssid')} disabled={!isConnected} className="btn text-xs">List Mine</button>
+                                        <button onClick={() => sendCommand('ssid -g 10')} disabled={!isConnected} className="btn text-xs">Random 10</button>
+                                        <button onClick={() => sendCommand('save -s')} disabled={!isConnected} className="btn text-xs">SD Save</button>
+                                        <button onClick={() => sendCommand('load -s')} disabled={!isConnected} className="btn text-xs">SD Load</button>
+                                        <button onClick={() => sendCommand('clearlist -s')} disabled={!isConnected} className="btn danger text-xs col-span-2">Clear SSIDs</button>
                                     </div>
                                 </div>
                             )}
 
+                            {/* --- BLE TAB --- */}
                             {activeTab === 'ble' && (
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <ActionCard
-                                            title="SNIFF BT" desc="Bluetooth Recon" icon="Bluetooth" color="cyan"
-                                            disabled={!isConnected} onClick={() => sendCommand('sniffbt')}
-                                        />
-                                        <ActionCard
-                                            title="WARDRIVE" desc="Map devices" icon="MapPin" color="cyan"
-                                            disabled={!isConnected} onClick={() => sendCommand('btwardrive')}
-                                        />
+                                <div className="space-y-2">
+                                    <SectionHeader title="Recon & Sniff" icon="Bluetooth" />
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <ActionCard title="Sniff BT" icon="BluetoothSearching" color="cyan" onClick={() => sendCommand('sniffbt')} disabled={!isConnected} />
+                                        <ActionCard title="Wardrive" icon="MapPin" color="cyan" onClick={() => sendCommand('btwardrive')} disabled={!isConnected} />
+                                        <ActionCard title="Sniff AirTags" icon="Target" color="cyan" onClick={() => sendCommand('sniffat')} disabled={!isConnected} />
+                                        <ActionCard title="Spoof AirTag" icon="Cast" color="cyan" onClick={() => sendCommand('spoofat')} disabled={!isConnected} />
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3 mt-4">
-                                        <div className="col-span-2 text-[10px] text-slate-500 uppercase tracking-widest border-b border-gray-800 pb-1 mb-1">Targeted Spam</div>
-                                        <button onClick={() => sendCommand('blespam -t apple')} disabled={!isConnected} className="btn danger">APPLE</button>
-                                        <button onClick={() => sendCommand('blespam -t google')} disabled={!isConnected} className="btn danger">GOOGLE</button>
-                                        <button onClick={() => sendCommand('blespam -t samsung')} disabled={!isConnected} className="btn danger">SAMSUNG</button>
-                                        <button onClick={() => sendCommand('blespam -t windows')} disabled={!isConnected} className="btn danger">WINDOWS</button>
-                                        <button onClick={() => sendCommand('blespam -t all')} disabled={!isConnected} className="btn danger col-span-2 py-3 bg-red-900/10">SPAM ALL DEVICES</button>
+
+                                    <SectionHeader title="Spam Attacks" icon="AlertTriangle" />
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button onClick={() => sendCommand('sourapple')} disabled={!isConnected} className="btn danger">Sour Apple</button>
+                                        <button onClick={() => sendCommand('swiftpair')} disabled={!isConnected} className="btn danger">Swift Pair</button>
+                                        <button onClick={() => sendCommand('samsungblespam')} disabled={!isConnected} className="btn danger">Samsung Spam</button>
+                                        <button onClick={() => sendCommand('flipperble')} disabled={!isConnected} className="btn danger">Flipper Spam</button>
+                                        <button onClick={() => sendCommand('btspamall')} disabled={!isConnected} className="btn danger col-span-2 py-3 bg-red-900/10"><Icon name="Zap" size={14} /> SPAM ALL MODES</button>
                                     </div>
                                 </div>
                             )}
 
+                            {/* --- SYSTEM TAB --- */}
+                            {activeTab === 'system' && (
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <ActionCard title="Info" icon="Info" color="cyan" onClick={() => sendCommand('info')} disabled={!isConnected} />
+                                        <ActionCard title="Help" icon="HelpCircle" color="cyan" onClick={() => sendCommand('help')} disabled={!isConnected} />
+                                    </div>
+
+                                    <SectionHeader title="Network Utils" icon="Network" />
+                                    <div className="flex gap-2">
+                                        <button onClick={() => sendCommand('pingscan')} disabled={!isConnected} className="btn flex-1">Ping Scan</button>
+                                        <button onClick={() => sendCommand('gpsdata')} disabled={!isConnected} className="btn flex-1">GPS Data</button>
+                                    </div>
+
+                                    <SectionHeader title="Settings" icon="Settings" />
+                                    <div className="space-y-2 bg-black/40 border border-gray-800 rounded p-3">
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span>Force PMKID</span>
+                                            <div className="flex gap-1">
+                                                <button onClick={() => sendCommand('settings -s ForcePMKID enable')} disabled={!isConnected} className="btn text-[10px] px-2 py-1">ON</button>
+                                                <button onClick={() => sendCommand('settings -s ForcePMKID disable')} disabled={!isConnected} className="btn text-[10px] px-2 py-1">OFF</button>
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span>Enable LED</span>
+                                            <div className="flex gap-1">
+                                                <button onClick={() => sendCommand('settings -s EnableLED enable')} disabled={!isConnected} className="btn text-[10px] px-2 py-1">ON</button>
+                                                <button onClick={() => sendCommand('settings -s EnableLED disable')} disabled={!isConnected} className="btn text-[10px] px-2 py-1">OFF</button>
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span>Save PCAP</span>
+                                            <div className="flex gap-1">
+                                                <button onClick={() => sendCommand('settings -s SavePCAP enable')} disabled={!isConnected} className="btn text-[10px] px-2 py-1">ON</button>
+                                                <button onClick={() => sendCommand('settings -s SavePCAP disable')} disabled={!isConnected} className="btn text-[10px] px-2 py-1">OFF</button>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2 mt-4 pt-2 border-t border-gray-800">
+                                            <button onClick={() => sendCommand('settings')} disabled={!isConnected} className="btn text-xs">View Settings</button>
+                                            <button onClick={() => sendCommand('settings -r')} disabled={!isConnected} className="btn danger text-xs">Restore Defaults</button>
+                                        </div>
+                                    </div>
+
+                                    <SectionHeader title="Power" icon="Power" />
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button onClick={() => sendCommand('update')} disabled={!isConnected} className="btn text-xs">Update FW</button>
+                                        <button onClick={() => sendCommand('reboot')} disabled={!isConnected} className="btn danger text-xs"><Icon name="RefreshCcw" size={12} /> Reboot</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* --- MACROS TAB --- */}
+                            {activeTab === 'macros' && (
+                                <div className="space-y-4">
+                                    <div className="bg-cyan-900/10 border border-cyan-500/20 p-4 rounded text-xs text-cyan-200 mb-4">
+                                        <Icon name="Info" className="inline mr-2 text-cyan-400" size={16} />
+                                        Macros run a predefined sequence of commands with delays. Do not interrupt while running.
+                                    </div>
+
+                                    <button
+                                        disabled={!isConnected || isMacroRunning}
+                                        onClick={() => runMacro("Full Recon Workflow", [
+                                            { cmd: "scanap" }, { delay: 5000 },
+                                            { cmd: "listap" },
+                                            { cmd: "scansta" }, { delay: 3000 },
+                                            { cmd: "liststa" }
+                                        ])}
+                                        className="w-full btn primary h-[60px] flex justify-between px-4 group"
+                                    >
+                                        <div className="text-left">
+                                            <div className="font-bold">Full Recon Workflow</div>
+                                            <div className="text-[10px] opacity-70 normal-case">scanap {'>'} 5s {'>'} listap {'>'} scansta {'>'} 3s {'>'} liststa</div>
+                                        </div>
+                                        <Icon name="Play" className="group-hover:scale-110 transition-transform" />
+                                    </button>
+
+                                    <button
+                                        disabled={!isConnected || isMacroRunning}
+                                        onClick={() => runMacro("Evil Portal Setup", [
+                                            { cmd: "scanap" }, { delay: 3000 },
+                                            { cmd: "select -a 0" },
+                                            { cmd: "evilportal" }
+                                        ])}
+                                        className="w-full btn danger h-[60px] flex justify-between px-4 group border-red-500/50"
+                                    >
+                                        <div className="text-left">
+                                            <div className="font-bold">Evil Portal Setup</div>
+                                            <div className="text-[10px] opacity-70 normal-case bg-transparent">scanap {'>'} 3s {'>'} select -a 0 {'>'} evilportal</div>
+                                        </div>
+                                        <Icon name="Play" className="group-hover:scale-110 transition-transform" />
+                                    </button>
+
+                                    <button
+                                        disabled={!isConnected || isMacroRunning}
+                                        onClick={() => runMacro("Deauth Target 0", [
+                                            { cmd: "select -a 0" },
+                                            { cmd: "attack -t deauth" }
+                                        ])}
+                                        className="w-full btn danger h-[60px] flex justify-between px-4 group border-red-500/50"
+                                    >
+                                        <div className="text-left">
+                                            <div className="font-bold">Deauth Selected Target</div>
+                                            <div className="text-[10px] opacity-70 normal-case bg-transparent">select -a 0 {'>'} attack -t deauth</div>
+                                        </div>
+                                        <Icon name="Play" className="group-hover:scale-110 transition-transform" />
+                                    </button>
+
+                                    <button
+                                        disabled={!isConnected || isMacroRunning}
+                                        onClick={() => runMacro("Capture PMKID Workflow", [
+                                            { cmd: "settings -s ForcePMKID enable" },
+                                            { cmd: "sniffpmkid" },
+                                            // The user would normally let this run, then stop and disable later.
+                                            // Leaving disable out of the instant sequence.
+                                        ])}
+                                        className="w-full btn h-[60px] flex justify-between px-4 group border-cyan-500/50"
+                                    >
+                                        <div className="text-left">
+                                            <div className="font-bold">Capture PMKID</div>
+                                            <div className="text-[10px] opacity-70 normal-case">ForcePMKID enable {'>'} sniffpmkid</div>
+                                        </div>
+                                        <Icon name="Play" className="group-hover:scale-110 transition-transform" />
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* --- FLASHER TAB --- */}
                             {activeTab === 'flasher' && (
                                 <div className="space-y-4">
                                     <div className="bg-blue-900/10 border border-blue-500/20 p-4 rounded text-sm text-blue-200">
@@ -339,6 +504,13 @@ function App() {
                                 </div>
                             )}
 
+                        </div>
+
+                        {/* GLOBAL STOP BUTTON */}
+                        <div className="p-4 border-t border-gray-800 shrink-0">
+                            <button onClick={() => sendCommand('stopscan')} disabled={!isConnected} className="w-full btn danger h-[50px] bg-red-900/20 hover:bg-red-900/40 border-red-500">
+                                <Icon name="Octagon" size={18} /> STOP CURRENT PROCESS
+                            </button>
                         </div>
                     </div>
 

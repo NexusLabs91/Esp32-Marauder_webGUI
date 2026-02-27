@@ -10,13 +10,13 @@ A standalone, web-based control interface for the [ESP32 Marauder](https://githu
 
 - **Zero Install:** Runs entirely in the browser (Chrome, Edge, Opera).
 - **Netrunner/Cyberpunk Aesthetic:** Modern dark-mode styling with cyan and red technical accents.
-- **Full Control Suite:** 
-  - WiFi Scanning (AP, Station, All)
-  - Bluetooth/BLE Sniffing & Spamming
-  - Attack Vectors (Deauth, Probe, Beacon Spam)
-  - PCAP Sniffing Controls
-  - Web USB Firmware Flashing
-- **Live Serial Terminal:** View output logs in real-time.
+- **Full Control Suite (5 Dedicated Tabs):** 
+  - **WiFi:** Advanced Scanning, PMKID/Pwnagotchi Sniffing, Karma/Evil Portal Attacks, target selection, and SSID management.
+  - **BLE:** Bluetooth Recon, AirTag spoofing, and targeted Spam Attacks (Apple, Samsung, Flipper, etc.).
+  - **System:** Ping Scans, GPS Data reading, Settings Management, and Firmware Updating.
+  - **Macros:** A built-in automation engine to run multi-step attack sequences with perfect timing.
+  - **Flasher:** Web USB Firmware Flashing utility.
+- **Live Serial Terminal:** View output logs in real-time with auto-colorization and download/copy options.
 
 ## 🏗️ Modular Architecture 
 
