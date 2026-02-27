@@ -37,11 +37,13 @@ If you want to build your own UI, simply swap out `styles.css` and `ui.jsx`!
 
 ### Local Usage
 
-1. Clone or download this repository.
-2. Open `index.html` in a chromium-based browser (Chrome/Edge).
-3. Connect your ESP32 via USB.
-4. Select the correct baud rate (default: `115200`).
-5. Click **CONNECT**.
+For complete installation and local hosting instructions, please refer to the **[Installation Guide](INSTALLATION_GUIDE.md)**!
+
+**Quick Start:**
+1. Clone the repository and run `npm install`.
+2. Run `npm start` to host the local server.
+3. Open the provided localhost URL in a chromium-based browser (Chrome/Edge).
+4. Connect your ESP32 via USB and click **CONNECT**.
 
 ## 🛠️ Requirements
 
